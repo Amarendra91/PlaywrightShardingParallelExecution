@@ -15,14 +15,6 @@ on:
         options:
           - demo
           - dev
-      test_tag:
-        description: 'Select test tag (Smoke or Regression)'
-        required: true
-        default: Smoke
-        type: choice
-        options:
-          - Smoke
-          - Regression
 
 jobs:
   test:
