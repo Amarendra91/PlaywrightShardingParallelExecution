@@ -5,6 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  * https://github.com/motdotla/dotenv
  */
 import dotenv from 'dotenv';
+import { blob } from 'stream/consumers';
 // import path from 'path';
 dotenv.config({
   path: process.env.ENV_NAME
@@ -25,9 +26,7 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: process.env.CI
-    ? [['html'], ['playwright-ctrf-json-reporter', {}]]
-    : [['html', { open: 'always' }]],
+  reporter: process.env.CI ? 'blob' : [['html', { open: 'always' }]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */

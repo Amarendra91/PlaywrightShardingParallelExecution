@@ -1,0 +1,93 @@
+name: playwright_test
+run-name: E2E Tests
+
+on:
+  push:
+    branches: [main, master]
+
+  workflow_dispatch:
+    inputs:
+      test_env:
+        description: 'Select test environment (demo or dev)'
+        required: true
+        default: demo
+        type: choice
+        options:
+          - demo
+          - dev
+      test_tag:
+        description: 'Select test tag (Smoke or Regression)'
+        required: true
+        default: Smoke
+        type: choice
+        options:
+          - Smoke
+          - Regression
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 1. Keeps other shards running even if one fails
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
+    environment: ${{ github.event.inputs.test_env || 'demo' }}
+
+    env:
+      BASE_URL: ${{ vars.BASE_URL }}
+      USER_NAME: ${{ secrets.USER_NAME }}
+      PASSWORD: ${{ secrets.PASSWORD }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+      - name: Run Sharded Playwright tests
+        run: SECRET_KEY=${{ secrets.SECRET_KEY }} npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      - name: Upload Shard Artifact
+        # 2. Upload artifact even if test failures occurred on this shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-shard-${{ matrix.shardIndex }}
+          path: blob-report/
+          retention-days: 1
+
+  merge-reports:
+    name: Merge Reports & Publish
+    # 3. Blocks this job until EVERY matrix instance in 'test' completes
+    needs: [test]
+    # 4. Ensures execution even if one or more shards failed (only aborts if workflow was manually cancelled)
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+
+      - name: Download all Shard Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-shard-*
+          merge-multiple: true
+
+      - name: Merge Reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload Consolidated Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-html-report
+          path: playwright-report/
+          retention-days: 14
